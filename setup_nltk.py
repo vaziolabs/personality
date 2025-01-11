@@ -34,7 +34,6 @@ def download_nltk_data():
         
         # Skip if resource already exists
         if os.path.exists(extract_path):
-            print(f"{resource} already exists at {extract_path}")
             continue
             
         zip_path = os.path.join(target_dir, f'{resource}.zip')

@@ -55,76 +55,79 @@ class LearningContext:
         }
     
     def practice_skill(self, skill_name):
+        """Optimized skill practice with adaptive learning rate"""
         if skill_name not in self.skills:
             return 0.0
             
         skill = self.skills[skill_name]
         momentum = self.skill_momentum[skill_name]
-        base_improvement = (1.0 - skill['mastery']) * 0.1 * (1.0 / skill['difficulty'])
         
-        # Apply momentum with dampening
-        improvement = base_improvement * (1.0 + momentum * 0.5)
+        # Adaptive learning rate based on mastery level
+        learning_rate = 0.1 * np.exp(-skill['mastery'] * skill['difficulty'])
+        base_improvement = (1.0 - skill['mastery']) * learning_rate
         
-        # Update momentum
-        self.skill_momentum[skill_name] = min(
-            2.0,
-            momentum * 0.8 + improvement * 0.2
-        )
+        # Optimized momentum calculation
+        improvement = base_improvement * (1.0 + np.tanh(momentum))
+        self.skill_momentum[skill_name] = min(2.0, momentum * 0.8 + improvement * 0.2)
         
-        # Update skill
+        # Efficient skill update
         skill['mastery'] = min(1.0, skill['mastery'] + improvement)
         skill['practice_count'] += 1
-        skill['recent_improvements'].append(improvement)
-        if len(skill['recent_improvements']) > 10:
-            skill['recent_improvements'].pop(0)
-            
+        
+        # Maintain fixed-size improvement history
+        skill['recent_improvements'] = (
+            skill['recent_improvements'][-9:] + [improvement] 
+            if skill['recent_improvements'] 
+            else [improvement]
+        )
+        
         return improvement * 100.0
     
     def process_rest_period(self, consciousness_state):
-        """Enhanced rest period processing with consciousness integration"""
+        """Optimized rest period processing"""
+        unconscious_influence = consciousness_state['unconscious'].mean()
+        emotional_factor = np.exp(abs(consciousness_state['emotional_state']))
+        consolidation_factor = consciousness_state['consolidation_factor']
+        
+        # Pre-calculate pattern factor
+        pattern_factor = self._process_learning_patterns(
+            consciousness_state['patterns'],
+            max(skill['mastery'] for skill in self.skills.values())
+        )
+        
+        # Batch process all skills
         for skill_name, skill in self.skills.items():
             if skill['recent_improvements']:
-                # Calculate consolidation with enhanced consciousness influence
-                avg_improvement = np.mean(skill['recent_improvements'])
-                unconscious_influence = consciousness_state['unconscious'].mean()
-                consolidation_factor = consciousness_state['consolidation_factor']
-                
-                # Apply emotional modulation
-                emotional_factor = np.exp(abs(consciousness_state['emotional_state']))
-                
-                # Process patterns from consciousness system
-                pattern_factor = self._process_learning_patterns(
-                    consciousness_state['patterns'],
-                    skill['mastery']
-                )
-                
-                # Enhanced consolidation calculation
                 consolidation = (
-                    avg_improvement * 0.3 * unconscious_influence * 
-                    consolidation_factor * emotional_factor * pattern_factor
+                    np.mean(skill['recent_improvements']) * 
+                    0.3 * unconscious_influence * 
+                    consolidation_factor * emotional_factor * 
+                    pattern_factor
                 )
                 
-                skill['consolidation'] += consolidation
+                # Single update for mastery and consolidation
                 skill['mastery'] = min(1.0, skill['mastery'] + consolidation)
+                skill['consolidation'] += consolidation
                 
-                # Adaptive momentum decay based on consolidation
-                decay_rate = 0.95 - (consolidation * 0.1)
-                self.skill_momentum[skill_name] *= max(0.8, decay_rate)
+                # Optimized momentum decay
+                self.skill_momentum[skill_name] *= max(
+                    0.8, 
+                    0.95 - (consolidation * 0.1)
+                )
 
-    def _process_learning_patterns(self, patterns, current_mastery):
-        """Process consciousness patterns for learning enhancement"""
+    @staticmethod
+    def _process_learning_patterns(patterns, current_mastery):
+        """Optimized pattern processing"""
         if not patterns:
             return 1.0
             
-        pattern_similarities = []
-        for pattern in patterns:
-            flat_pattern = pattern.flatten()
-            avg_activation = np.mean(flat_pattern)
-            pattern_similarities.append(avg_activation)
-            
-        # Calculate pattern influence factor
+        # Vectorized pattern processing
+        pattern_similarities = np.mean([
+            pattern.flatten() for pattern in patterns
+        ], axis=1)
+        
         pattern_strength = np.mean(pattern_similarities)
-        mastery_factor = 1 - current_mastery  # Harder to improve at higher mastery
+        mastery_factor = 1 - current_mastery
         
         return 1.0 + (pattern_strength * mastery_factor * 0.5)
 

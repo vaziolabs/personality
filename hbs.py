@@ -695,41 +695,56 @@ class HumanBehaviorSystem:
 
     def process_text_knowledge(self, knowledge_item):
         """Process text knowledge across consciousness levels"""
-        # Extract concepts and relationships
-        concepts = self._extract_concepts(knowledge_item['content'])
-        relationships = self._extract_relationships(
-            knowledge_item['content'],
-            knowledge_item.get('links', {})
-        )
-        
-        # Process through consciousness system
-        consciousness_response = self.consciousness.process_text_input(
-            knowledge_item['content'],
-            context={'concepts': concepts, 'relationships': relationships}
-        )
-        
-        # Update learning context
-        learning_results = {
-            'concepts': concepts,
-            'relationships': relationships,
-            'consciousness_response': consciousness_response
-        }
-        
-        # Process through learning layers
-        self.learning_context.learning_layers['conscious']['active_concepts'].update(
-            {concept: 1.0 for concept in concepts}
-        )
-        
-        # Process semantic associations
-        self._process_semantic_associations(knowledge_item)
-        
-        # Integrate deep patterns
-        self._integrate_deep_patterns(knowledge_item)
-        
-        # Update knowledge desires
-        self._update_knowledge_desires(concepts)
-        
-        return learning_results
+        try:
+            # Extract concepts and relationships
+            concepts = self._extract_concepts(knowledge_item['content'])
+            relationships = self._extract_relationships(
+                knowledge_item['content'],
+                knowledge_item.get('links', {})
+            )
+            
+            # Process through consciousness system
+            consciousness_response = self.consciousness.process_text_input(
+                knowledge_item['content'],
+                context={'concepts': concepts, 'relationships': relationships}
+            )
+            
+            # Initialize learning metrics with safe defaults
+            learning_results = {
+                'depth': 0.0,
+                'breadth': 0.0,
+                'cognitive_load': 0.0,  # Changed from 'load'
+                'understanding': 0.0
+            }
+            
+            # Calculate metrics safely
+            if concepts and relationships:
+                learning_results.update({
+                    'depth': float(len(relationships)) / max(len(concepts), 1),
+                    'breadth': float(len(concepts)) / 100.0,
+                    'cognitive_load': float(consciousness_response.get('dissonance', {}).get('total', 0.0)),
+                    'understanding': float(consciousness_response.get('weights', {}).get('conscious', 0.0))
+                })
+            
+            # Process through learning layers
+            if hasattr(self, 'learning_context'):
+                self.learning_context.learning_layers['conscious']['active_concepts'].update(
+                    {concept: 1.0 for concept in concepts}
+                )
+                self._process_semantic_associations(knowledge_item)
+                self._integrate_deep_patterns(knowledge_item)
+                self._update_knowledge_desires(concepts)
+            
+            return learning_results
+            
+        except Exception as e:
+            print(f"Error in process_text_knowledge: {str(e)}")
+            return {
+                'depth': 0.0,
+                'breadth': 0.0,
+                'cognitive_load': 0.0,  # Changed from 'load'
+                'understanding': 0.0
+            }
 
     def _extract_concepts(self, text):
         """Extract key concepts from text content"""

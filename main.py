@@ -1,5 +1,7 @@
 import os
 import nltk
+from datetime import datetime
+import argparse
 
 # Set up NLTK data path
 nltk_data_dir = os.path.expanduser('./nltk_data')
@@ -394,65 +396,99 @@ def example_stimulus_sequence(t):
     noise = np.random.normal(0, 10)  # Random noise
     return base + weekly + noise
 
-def simulate_knowledge_acquisition(topics):
-    """Main simulation function"""
-    # Check for existing saved state
-    serializer = SystemSerializer()
-    latest_state = None
+def save_simulation_state(hbs, context, metrics, timestamp=None):
+    """Save the complete simulation state"""
+    if timestamp is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    # Try to find most recent save file
-    if os.path.exists('./saved_states'):
-        save_files = sorted(os.listdir('./saved_states'))
-        if save_files:
-            latest_save = os.path.join('./saved_states', save_files[-1])
-            try:
-                latest_state = serializer.load_system(latest_save)
-                print(f"Loaded previous state from: {latest_save}")
-            except Exception as e:
-                print(f"Could not load previous state: {e}")
+    # Ensure all components are present
+    state = {
+        'hbs': hbs,
+        'learning_context': context,
+        'metrics': metrics or {
+            'knowledge_depth': [],
+            'knowledge_breadth': [],
+            'cognitive_load': [],
+            'understanding': []
+        },
+        'timestamp': timestamp
+    }
     
-    # Initialize or restore system
-    if latest_state:
-        hbs = latest_state['hbs']
-        context = latest_state['learning_context']
-        metrics = latest_state['metrics']
-    else:
-        # Initialize new system
-        hbs = HumanBehaviorSystem()
-        context = create_learning_scenario()
-        metrics = defaultdict(list)
-    
+    filepath = f'./saved_states/system_state_{timestamp}.pkl'
     try:
-        # Run simulation
-        wiki_kb = WikiKnowledgeBase()
-        
-        for topic in topics:
-            print(f"Learning about: {topic}")
-            knowledge = wiki_kb.fetch_topic(topic)
-            
-            if not knowledge:
-                continue
-                
-            # Process knowledge
-            learning_results = hbs.process_text_knowledge(knowledge)
-            
-            # Update metrics
-            metrics['concepts_learned'].append(len(learning_results.get('concepts', [])))
-            metrics['relationships_formed'].append(len(learning_results.get('relationships', [])))
-            metrics['understanding_level'].append(hbs.learning_state['learning_momentum'])
-        
-        # Save final state
-        save_path = save_simulation_state(hbs, context, metrics)
-        print(f"Saved final state to: {save_path}")
-        
-        return metrics, context, hbs
-        
+        SystemSerializer.save_system(state, filepath)
+        return filepath
     except Exception as e:
-        print(f"Error in simulation: {str(e)}")
-        # Save state on error for recovery
-        save_path = save_simulation_state(hbs, context, metrics, 'error_state.pkl')
-        print(f"Saved error state to: {save_path}")
-        raise
+        print(f"Error saving state: {str(e)}")
+        return None
+
+def load_simulation_state():
+    """Load the most recent simulation state"""
+    import glob
+    import os
+    
+    # Find most recent state file
+    state_files = glob.glob('./saved_states/system_state_*.pkl')
+    if not state_files:
+        return None
+    
+    latest_file = max(state_files, key=os.path.getctime)
+    print(f"Loading previous state from: {latest_file}")
+    
+    state = SystemSerializer.load_system(latest_file)
+    if state and isinstance(state, dict):
+        return state
+    return None
+
+def simulate_knowledge_acquisition(topics):
+    """Simulate knowledge acquisition process"""
+    # Initialize metrics structure
+    metrics = {
+        'knowledge_depth': [],
+        'knowledge_breadth': [],
+        'cognitive_load': [],  # Changed from 'load'
+        'understanding': []
+    }
+    
+    # Try to load previous state
+    previous_state = load_simulation_state()
+    if previous_state:
+        try:
+            hbs = previous_state.get('hbs')
+            context = previous_state.get('learning_context', TextLearningContext())
+            # Update metrics from previous state if they exist
+            for key in metrics:
+                if key in previous_state.get('metrics', {}):
+                    metrics[key] = previous_state['metrics'][key]
+            if not isinstance(hbs, HumanBehaviorSystem):
+                hbs = HumanBehaviorSystem()
+        except Exception as e:
+            print(f"Error loading previous state: {e}")
+            hbs = HumanBehaviorSystem()
+            context = TextLearningContext()
+    else:
+        hbs = HumanBehaviorSystem()
+        context = TextLearningContext()
+
+    # Process topics
+    wiki = WikiKnowledgeBase()
+    for topic in topics:
+        print(f"Learning about: {topic}")
+        try:
+            knowledge = wiki.get_article(topic)
+            if knowledge:
+                learning_results = hbs.process_text_knowledge(knowledge)
+                # Map learning results to metrics
+                metrics['knowledge_depth'].append(learning_results['depth'])
+                metrics['knowledge_breadth'].append(learning_results['breadth'])
+                metrics['cognitive_load'].append(learning_results['cognitive_load'])  # Changed from 'load'
+                metrics['understanding'].append(learning_results['understanding'])
+        except Exception as e:
+            print(f"Error processing topic {topic}: {str(e)}")
+            save_error_state(hbs, context, metrics)
+            continue
+
+    return metrics, context, hbs
 
 def visualize_knowledge_state(learning_context, human):
     """Visualize current knowledge state"""
@@ -481,220 +517,290 @@ def visualize_knowledge_state(learning_context, human):
     plt.tight_layout()
     return fig
 
-def save_simulation_state(hbs, context, metrics, filename=None):
-    """Save simulation state to file"""
-    serializer = SystemSerializer()
+def plot_learning_results(metrics):
+    """Plot learning metrics over time"""
+    import matplotlib.pyplot as plt
     
-    # Create a state dictionary that matches the expected format
-    simulation_state = {
-        'hbs': hbs,  # HumanBehaviorSystem instance
-        'context': context.__dict__,
-        'metrics': {
-            'learning_progress': metrics.get('learning_progress', []),
-            'consciousness_states': metrics.get('consciousness_states', []),
-            'emotional_states': metrics.get('emotional_states', []),
-            'knowledge_acquisition': metrics.get('knowledge_acquisition', {})
-        }
+    # Create figure with subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+    
+    # Plot knowledge acquisition
+    if 'knowledge_depth' in metrics:
+        ax1.plot(metrics['knowledge_depth'], label='Knowledge Depth')
+        ax1.plot(metrics['knowledge_breadth'], label='Knowledge Breadth')
+        ax1.set_title('Knowledge Acquisition Over Time')
+        ax1.set_xlabel('Learning Steps')
+        ax1.set_ylabel('Knowledge Level')
+        ax1.legend()
+    
+    # Plot cognitive metrics
+    if 'cognitive_load' in metrics:
+        ax2.plot(metrics['cognitive_load'], label='Cognitive Load')
+        ax2.plot(metrics['understanding'], label='Understanding')
+        ax2.set_title('Cognitive Metrics Over Time')
+        ax2.set_xlabel('Learning Steps')
+        ax2.set_ylabel('Level')
+        ax2.legend()
+    
+    plt.tight_layout()
+    plt.savefig('./plots/learning_results.png')
+    plt.close()
+
+def save_error_state(hbs, context, metrics):
+    """Save system state when an error occurs"""
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    error_state = {
+        'hbs': hbs,
+        'learning_context': context,
+        'metrics': metrics,
+        'timestamp': timestamp
     }
     
-    return serializer.save_system(simulation_state, filename)
+    filepath = f'./saved_states/error_state.pkl'
+    SystemSerializer.save_system(error_state, filepath)
+    print(f"Saved error state to: {filepath}")
 
-def load_simulation_state(filepath):
-    """Load a previously saved simulation state"""
-    serializer = SystemSerializer()
-    loaded_state = serializer.load_system(filepath)
+class WikiKnowledgeBase:
+    def __init__(self):
+        import wikipedia
+        self.wiki = wikipedia
+        
+    def get_article(self, topic):
+        """Retrieve article content from Wikipedia"""
+        try:
+            # Search for the page
+            page = self.wiki.page(topic, auto_suggest=True)
+            return {
+                'title': page.title,
+                'content': page.content,
+                'links': {link: '' for link in page.links},  # Convert links list to dict
+                'references': page.references,
+                'url': page.url
+            }
+        except self.wiki.DisambiguationError as e:
+            print(f"Disambiguation for {topic}. Trying most relevant option...")
+            try:
+                # Try first option from disambiguation
+                page = self.wiki.page(e.options[0], auto_suggest=False)
+                return {
+                    'title': page.title,
+                    'content': page.content,
+                    'links': {link: '' for link in page.links},  # Convert links list to dict
+                    'references': page.references,
+                    'url': page.url
+                }
+            except:
+                print(f"No relevant disambiguation option found for: {topic}")
+                return None
+        except Exception as e:
+            print(f"Error fetching topic {topic}: {str(e)}")
+            return None
+
+def main():
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description='Run personality simulation')
+    parser.add_argument('--plot', action='store_true', help='Only load and plot results')
+    args = parser.parse_args()
     
-    return (
-        loaded_state['hbs'],
-        loaded_state['learning_context'],
-        loaded_state['metrics']
-    )
+    if args.plot:
+        # Load most recent state and plot
+        previous_state = load_simulation_state()
+        if previous_state and 'metrics' in previous_state:
+            plot_learning_results(previous_state['metrics'])
+            plt.show()
+        else:
+            print("No previous state found to plot")
+        return
 
-# Example usage
-if __name__ == "__main__":
-    # First ensure NLTK data is downloaded
-    from setup_nltk import download_nltk_data
-    download_nltk_data()
-
+    # Original simulation logic
     topics = [
         "Logic",
         "Proof",
-        "Constructive proof",
+        # "Constructive proof",
         "Proof by Induction",
         "Proof by Contradiction",
-        "Proof Theory",
+        # "Proof Theory",
         "Aesthetics",
-        "Ethics",
+        # "Ethics",
         "Linguistics",
-        "Poetry"
+        "Poetry",
         "Philosophy",
         "Epistemology",
         "Set Theory",
         "Intuitionistic type theory",
         "Math Theory",
         "Data Science",
-        "Computer Science",
-        "Physics",
+        # "Computer Science",
+        # "Physics",
         "Metaphysics",
-        "Spirituality",
+        # "Spirituality",
         "History",
-        "Sutras",
+        # "Sutras",
         "Meditation",
         "Pranayama",
         "Tao",
-        "Tai chi",
+        # "Tai chi",
         "Five precepts",
-        "The arts",
+        # "The arts",
         "Art",
         "Psychology of art",
-        "Quantum mechanics",
+        # "Quantum mechanics",
         "Introduction to quantum mechanics",
-        "Interpretations of quantum mechanics",
+        # "Interpretations of quantum mechanics",
         "Philosophy of physics",
         "Sustainability",
-        "Ecological systems theory",
-        "Sustainable development",
+        # "Ecological systems theory",
+        # "Sustainable development",
         "Ecosystem management",
-        "Ecological literacy",
+        # "Ecological literacy",
         "Ethics of technology",
         "Technology and society",
         "Philosophy of technology",
         "Scientific method",
-        "History of scientific method",
+        # "History of scientific method",
         "Systems thinking",
         "Critical systems thinking",
-        "Creative entrepreneurship",
+        # "Creative entrepreneurship",
         "Entrepreneurial economics",
-        "Sustainable living",
-        "Minimalism",
+        # "Sustainable living",
+        # "Minimalism",
         "Sustainable consumption",
-        "The Philosophy of Money",
-        "Personal finance",
-        "Finance",
-        "Investment",
-        "Financial literacy",
+        # "The Philosophy of Money",
+        # "Personal finance",
+        # "Finance",
+        # "Investment",
+        # "Financial literacy",
         "Investment strategy",
         "Return (finance)",
         "Exchange rate",
-        "Economics",
-        "Dividend",
-        "Interest",
-        "Asset",
-        "Cash flow",
-        "Diversification (finance)",
-        "Volatility (finance)",
-        "Financial risk",
-        "Personal boundaries",
-        "Professional boundaries",
-        "Interpersonal relationship",
+        # "Economics",
+        # "Dividend",
+        # "Interest",
+        # "Asset",
+        # "Cash flow",
+        # "Diversification (finance)",
+        # "Volatility (finance)",
+        # "Financial risk",
+        # "Personal boundaries",
+        # "Professional boundaries",
+        # "Interpersonal relationship",
         "Proxemics",
-        "Assertiveness",
+        # "Assertiveness",
         "Nonviolent communication",
-        "Morality",
-        "Right and wrong",
+        # "Morality",
+        # "Right and wrong",
         "Sociology of culture",
         "Culture",
-        "Sociology",
-        "Cultural analysis",
+        # "Sociology",
+        # "Cultural analysis",
         "Cultural identity",
         "Sociocultural evolution",
         "Attachment theory",
-        "Attachment in adults",
-        "Biology of romantic love",
+        # "Attachment in adults",
+        # "Biology of romantic love",
         "Theories of love",
         "Affectional bond",
-        "Conflict resolution",
+        # "Conflict resolution",
         "Mediation",
         "Dispute resolution",
         "Active listening",
-        "Listening",
+        # "Listening",
         "Listening behaviour types",
-        "Communication",
-        "Reflective listening",
-        "Sarcasm",
-        "Humor",
-        "Empathy",
+        # "Communication",
+        # "Reflective listening",
+        # "Sarcasm",
+        # "Humor",
+        # "Empathy",
         "History of geometry",
         "Sacred geometry",
-        "Platonic solids",
-        "Tetractys",
-        "Cymatics",
-        "Sri Yantra",
+        # "Platonic solids",
+        # "Tetractys",
+        # "Cymatics",
+        # "Sri Yantra",
         "Tree of life (Kabbalah)",
         "Theology",
         "Subtle body",
-        "Chakra",
+        # "Chakra",
         "Kundalini",
-        "Kundalini yoga",
+        # "Kundalini yoga",
         "Dantian",
         "Consciousness",
         "Universal mind",
-        "Panpsychism",
+        # "Panpsychism",
         "Electromagnetic theories of consciousness",
         "Inner peace",
-        "Contentment",
-        "Peace of Mind",
+        # "Contentment",
+        # "Peace of Mind",
         "Peace",
         "Santosha",
-        "Calmness",
-        "List of religions and spiritual traditions",
+        # "Calmness",
+        # "List of religions and spiritual traditions",
         "Comparative religion",
-        "Religion",
+        # "Religion",
         "World religions",
         "Ontology",
         "Ontological argument",
         "Existence",
         "Flow (psychology)",
-        "Motivation",
+        # "Motivation",
         "Motivated reasoning",
         "Motivation and Personality",
-        "Maslow's hierarchy of needs",
+        # "Maslow's hierarchy of needs",
         "Neuroplasticity",
         "Addiction-related structural neuroplasticity",
         "Brain healing",
-        "Brain health and pollution",
+        # "Brain health and pollution",
         "Memory improvement",
-        "Activity-dependent plasticity",
-        "Creativity",
-        "Innovation",
+        # "Activity-dependent plasticity",
+        # "Creativity",
+        # "Innovation",
         "Creativity techniques",
         "Memory improvement",
-        "Memorization",
-        "Memory and retention in learning",
-        "Memory technique",
+        # "Memorization",
+        # "Memory and retention in learning",
+        # "Memory technique",
         "List of cognitive biases",
         "Cognitive bias",
         "Heuristic (psychology)",
-        "Dunning–Kruger effect",
+        # "Dunning–Kruger effect",
         "Motivated Reasoning",
-        "Cognitive bias mitigation",
-        "Anchoring effect",
-        "Psychological resilience",
-        "Family resilience",
-        "Resilience",
+        # "Cognitive bias mitigation",
+        # "Anchoring effect",
+        # "Psychological resilience",
+        # "Family resilience",
+        # "Resilience",
         "Community resilience",
-        "Mental toughness",
+        # "Mental toughness",
         "Goal setting",
-        "Goal",
-        "Creative visualization",
+        # "Goal",
+        # "Creative visualization",
         "Objectives and key results",
         "Goal orientation",
         "Data and information visualization",
         "Time management",
-        "Self-reflection",
+        # "Self-reflection",
         "Reflective practice",
-        "Emotional intelligence",
+        # "Emotional intelligence",
         "Empathy quotient",
     ]
     
-    # Run simulation
-    metrics, context, final_hbs = simulate_knowledge_acquisition(topics)
-    
-    # Save simulation state
-    save_path = save_simulation_state(final_hbs, context, metrics)
-    print(f"Simulation state saved to: {save_path}")
-    
-    # Plot results
-    plot_learning_results(metrics)
-    plt.show()
+    try:
+        metrics, context, final_hbs = simulate_knowledge_acquisition(topics)
+        # Save simulation state
+        save_path = save_simulation_state(final_hbs, context, metrics)
+        print(f"Simulation state saved to: {save_path}")
+        
+        # Plot results if metrics exist
+        if metrics and any(metrics.values()):
+            plot_learning_results(metrics)
+            plt.show()
+    except Exception as e:
+        print(f"Simulation failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+if __name__ == "__main__":
+    main()
     

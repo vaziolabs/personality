@@ -108,18 +108,42 @@ class DesireSystem:
             'unconscious': primal_impact
         }
 
-    def process_layered_reward(self, experience, context):
-        """Process rewards at different consciousness levels"""
+    def process_layered_reward(self, experience, context, time_horizon='short'):
+        """Process rewards at different consciousness levels with time-based weighting"""
+        # Get base reward evaluations
         reward_impact = {
             'conscious': self._evaluate_conscious_reward(experience, context),
             'subconscious': self._evaluate_subconscious_reward(experience, context),
             'unconscious': self._evaluate_unconscious_reward(experience, context)
         }
         
-        # Update reward memories
-        for layer, rewards in self.reward_memory.items():
-            for category in rewards:
-                self._update_reward_memory(layer, category, reward_impact[layer])
+        # Adjust weights based on time horizon
+        if time_horizon == 'long':
+            weights = {
+                'conscious': 0.2,
+                'subconscious': 0.4,
+                'unconscious': 0.4  # Stronger unconscious/subconscious for long-term
+            }
+        else:  # short-term
+            weights = {
+                'conscious': 0.5,
+                'subconscious': 0.3,
+                'unconscious': 0.2  # Conscious dominates short-term
+            }
+        
+        # Apply dissonance modulation
+        dissonance = self._calculate_layer_dissonance(reward_impact)
+        if dissonance > 0.3:  # High dissonance
+            # Shift towards unconscious processing
+            weights = self._adjust_weights_for_dissonance(weights, dissonance)
+        
+        # Weight and combine rewards
+        weighted_impact = {
+            layer: impact * weights[layer]
+            for layer, impact in reward_impact.items()
+        }
+        
+        return weighted_impact
 
     def process_knowledge_reward(self, concepts_learned, relationships_formed):
         """Process rewards from knowledge acquisition"""
@@ -142,25 +166,49 @@ class FuturePrediction:
         # Remember what led to what
         self.outcome_memory = defaultdict(list)
         
-    def predict_outcome(self, action, current_state):
-        # Look into possible futures
+    def predict_outcome(self, action, current_state, time_steps=3):
+        """Predict outcomes with layered consciousness influence"""
         predicted_states = []
         current = current_state
         
-        for step in range(self.lookahead_steps):
-            # What might happen next
-            next_state = self._simulate_next_state(current, action)
-            # Care less about far future
+        for step in range(time_steps):
+            # Adjust layer weights based on prediction distance
+            layer_weights = self._get_time_based_weights(step)
+            
+            # Generate layered predictions
+            next_state = self._generate_layered_prediction(
+                current, 
+                action,
+                layer_weights
+            )
+            
             importance = self.time_discount ** step
             predicted_states.append((next_state, importance))
             current = next_state
         
-        # Calculate overall expected outcome
-        total_outcome = sum(state * importance 
-                          for state, importance in predicted_states)
-        
-        return total_outcome
-    
+        return predicted_states
+
+    def _get_time_based_weights(self, step):
+        """Get consciousness layer weights based on prediction distance"""
+        if step < 1:  # Immediate future
+            return {
+                'conscious': 0.6,
+                'subconscious': 0.3,
+                'unconscious': 0.1
+            }
+        elif step < 2:  # Near future
+            return {
+                'conscious': 0.3,
+                'subconscious': 0.4,
+                'unconscious': 0.3
+            }
+        else:  # Distant future
+            return {
+                'conscious': 0.2,
+                'subconscious': 0.4,
+                'unconscious': 0.4
+            }
+
     def _simulate_next_state(self, current_state, action):
         # Simple prediction based on past patterns
         key = str((current_state, action))

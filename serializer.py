@@ -171,3 +171,49 @@ class SystemSerializer:
             else:
                 result[k] = v
         return result
+
+    @staticmethod
+    def save_system(system, filepath):
+        """Save system state to file"""
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        # Validate state before saving
+        if isinstance(system, dict):
+            required_keys = ['hbs', 'learning_context', 'metrics']
+            if not all(key in system for key in required_keys):
+                raise ValueError(f"Missing required keys in system state: {required_keys}")
+        
+        with open(filepath, 'wb') as f:
+            pickle.dump(system, f)
+    
+    @staticmethod
+    def load_system(filepath):
+        """Load system state from file"""
+        try:
+            with open(filepath, 'rb') as f:
+                state = pickle.load(f)
+                
+            # Validate loaded state
+            if isinstance(state, dict):
+                # Check for minimum required keys
+                if 'hbs' in state:
+                    # Initialize missing components with defaults
+                    state.setdefault('metrics', {
+                        'knowledge_depth': [],
+                        'knowledge_breadth': [],
+                        'cognitive_load': [],
+                        'understanding': []
+                    })
+                    state.setdefault('timestamp', datetime.now().strftime("%Y%m%d_%H%M%S"))
+                    return state
+                else:
+                    print("Invalid state file: missing HBS")
+            else:
+                print("Invalid state file: not a dictionary")
+            
+            return None
+            
+        except (FileNotFoundError, EOFError, pickle.UnpicklingError) as e:
+            print(f"Could not load state from {filepath}: {str(e)}")
+            return None

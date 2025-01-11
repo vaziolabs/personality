@@ -4,7 +4,7 @@ from numba import jit
 from desire import DesireSystem, FuturePrediction
 
 class ConsciousnessLayer:
-    def __init__(self, size, name):
+    def __init__(self, size, name, dissonance_threshold=0.3):
         self.state = np.zeros((size, size), dtype=np.float32)
         self.activation_history = np.zeros((1000, size, size), dtype=np.float32)
         self.history_index = 0
@@ -17,6 +17,8 @@ class ConsciousnessLayer:
         self.name = name
         self.layer_above = None
         self.layer_below = None
+        self.dissonance_threshold = dissonance_threshold  # Default dissonance threshold
+        
         # Add desire and prediction systems
         self.desire = DesireSystem(size)
         self.prediction = FuturePrediction(size)
@@ -72,10 +74,16 @@ class ConsciousnessLayer:
         confidence = 1.0 - dissonance_level
         current_belief = self.belief_contexts[context]
         
+        # Convert text input to activation pattern if it's a string
+        if isinstance(new_input, str):
+            input_pattern = self._create_text_pattern(new_input)
+        else:
+            input_pattern = new_input
+        
         # Update primary context
         self.belief_contexts[context] = (
             current_belief * (0.8 * confidence) + 
-            new_input * (0.2 * (2.0 - confidence))
+            input_pattern * (0.2 * (2.0 - confidence))
         )
         
         # Process related contexts
@@ -115,57 +123,86 @@ class ConsciousnessLayer:
 
     def _init_layer_weights(self, name):
         """Initialize processing weights based on layer type"""
+        weights = {
+            'rational_weight': 0.0,
+            'emotional_weight': 0.0,
+            'instinctive_weight': 0.0
+        }
+        
         if name == "Conscious":
-            return {
+            weights.update({
                 'rational_weight': 0.7,
                 'emotional_weight': 0.2,
-                'instinctive_weight': 0.1
-            }
+                'instinctive_weight': 0.1,
+                name: np.ones((self.size, self.size)) * 0.7  # Layer-specific processing matrix
+            })
         elif name == "Subconscious":
-            return {
+            weights.update({
                 'rational_weight': 0.3,
                 'emotional_weight': 0.5,
-                'instinctive_weight': 0.2
-            }
+                'instinctive_weight': 0.2,
+                name: np.ones((self.size, self.size)) * 0.5  # Layer-specific processing matrix
+            })
         else:  # Unconscious
-            return {
+            weights.update({
                 'rational_weight': 0.1,
                 'emotional_weight': 0.3,
-                'instinctive_weight': 0.6
-            }
+                'instinctive_weight': 0.6,
+                name: np.ones((self.size, self.size)) * 0.3  # Layer-specific processing matrix
+            })
+        
+        return weights
 
-    def process_text(self, text_data, desire_context):
-        """Process text input at consciousness layer level"""
+    def process_text(self, text_data, desires):
+        """Process text at conscious level"""
         # Extract semantic features
         features = self._extract_semantic_features(text_data)
         
-        # Update activation patterns based on text content
+        # Calculate activation pattern
         activation = self._calculate_text_activation(features)
-        self.update_history(activation)
         
-        # Process through belief system
-        belief_update = self._process_text_beliefs(features)
-        
-        # Integrate with desire context
-        response = {
+        return {
             'activation': activation,
-            'beliefs': belief_update,
-            'patterns': self._identify_text_patterns(features),
-            'emotional_response': self._calculate_emotional_response(features)
+            'features': features,
+            'desires': desires
         }
-        
-        return response
 
     def _extract_semantic_features(self, text_data):
         """Extract semantic features from text"""
+        # Create fixed-size pattern matrix
+        text_pattern = self._create_text_pattern(text_data)
+        
         return {
             'content': text_data,
             'complexity': len(text_data.split()),
             'emotional_valence': self._estimate_emotional_content(text_data),
-            'pattern_matches': self.find_similar_patterns(
-                np.array([ord(c) % self.size for c in text_data]).reshape(self.size, -1)
-            )
+            'pattern_matches': self.find_similar_patterns(text_pattern)
         }
+
+    def _create_text_pattern(self, text_data):
+        """Create a fixed-size pattern matrix from text"""
+        # Calculate chunk size to divide text into size*size chunks
+        chunk_size = max(1, len(text_data) // (self.size * self.size))
+        
+        # Initialize pattern matrix
+        pattern = np.zeros((self.size, self.size))
+        
+        # Fill pattern matrix with averaged character values
+        for i in range(self.size):
+            for j in range(self.size):
+                start_idx = (i * self.size + j) * chunk_size
+                end_idx = start_idx + chunk_size
+                
+                if start_idx < len(text_data):
+                    chunk = text_data[start_idx:min(end_idx, len(text_data))]
+                    if chunk:
+                        pattern[i, j] = sum(ord(c) for c in chunk) / len(chunk)
+        
+        # Normalize pattern
+        if pattern.max() > 0:
+            pattern = pattern / pattern.max()
+        
+        return pattern
 
     def _calculate_text_activation(self, features):
         """Calculate activation pattern from text features"""
@@ -173,7 +210,7 @@ class ConsciousnessLayer:
         
         # Modulate by complexity
         complexity_factor = min(1.0, features['complexity'] / 100.0)
-        base_activation += complexity_factor * self.processing_weights[self.name]
+        base_activation += complexity_factor * self.processing_weights.get(self.name, np.ones((self.size, self.size)) * 0.5)
         
         # Add emotional influence
         emotional_factor = features['emotional_valence']
@@ -200,9 +237,20 @@ class ConsciousnessLayer:
             'activation': self.activation_history[max(0, self.history_index-10):self.history_index].mean(axis=0)
         }
 
-    def _calculate_emotional_response(self, features):
-        """Calculate emotional response to text"""
-        return features['emotional_valence'] * self.processing_weights[self.name]
+    def _calculate_emotional_response(self, emotional_input):
+        """Calculate emotional response from either features dict or direct value"""
+        if isinstance(emotional_input, dict):
+            # Extract emotional valence from features
+            emotional_value = emotional_input.get('emotional_valence', 0.0)
+        else:
+            # Use direct emotional value
+            emotional_value = float(emotional_input)
+        
+        # Apply layer-specific processing weight
+        layer_weight = self.processing_weights.get(self.name, 1.0)
+        
+        # Calculate final emotional response
+        return emotional_value * layer_weight
 
     def _estimate_emotional_content(self, text):
         """Estimate emotional content of text"""
@@ -213,12 +261,129 @@ class ConsciousnessLayer:
                 emotional_value += self.emotional_weights.get(pattern_key, 0.0)
         return np.tanh(emotional_value)  # Normalize to [-1, 1]
 
+    def process_patterns(self, text_data, conscious_response):
+        """Process patterns at subconscious level"""
+        # Extract text patterns
+        text_pattern = self._create_text_pattern(text_data)
+        
+        # Find similar stored patterns
+        pattern_matches = self.find_similar_patterns(text_pattern)
+        
+        # Calculate pattern-based activation
+        pattern_activation = np.zeros((self.size, self.size))
+        emotional_weight = 0.0
+        
+        for location, similarity, emotion in pattern_matches:
+            pattern_activation += self.state[location] * similarity * (1 + emotion)
+            emotional_weight += emotion * similarity
+        
+        # Normalize emotional weight
+        if pattern_matches:
+            emotional_weight /= len(pattern_matches)
+        
+        # Integrate with conscious response
+        conscious_activation = (
+            conscious_response['activation'] 
+            if isinstance(conscious_response, dict) 
+            else conscious_response
+        )
+        
+        integrated_response = {
+            'activation': pattern_activation * 0.6 + conscious_activation * 0.4,
+            'patterns': pattern_matches,
+            'emotional_weight': emotional_weight
+        }
+        
+        # Update state and history
+        self.state = integrated_response['activation']
+        self.update_history(integrated_response['activation'])
+        
+        return integrated_response
+
+    def integrate_knowledge(self, conscious_response, subconscious_response):
+        """Integrate knowledge while maintaining beliefs and potential dissonance"""
+        # Extract activations and features
+        conscious_activation = conscious_response['activation']
+        conscious_features = conscious_response.get('features', {})
+        subconscious_activation = subconscious_response['activation']
+        
+        # Calculate belief consistency
+        belief_conflict = self._check_belief_consistency(
+            conscious_features.get('content', ''),
+            self.active_beliefs
+        )
+        
+        # Calculate dissonance level
+        dissonance = np.mean([
+            belief_conflict,
+            abs(np.mean(conscious_activation - subconscious_activation)),
+            abs(np.mean(self.state - subconscious_activation))
+        ])
+        
+        # Update beliefs if dissonance is below threshold
+        if dissonance < self.dissonance_threshold:
+            self.update_belief(
+                conscious_features.get('content', ''),
+                conscious_features.get('context', 'general'),
+                conscious_features.get('related_contexts', {}),
+                dissonance
+            )
+        else:
+            # Record dissonance for potential later resolution
+            self._record_cognitive_dissonance(conscious_features, dissonance)
+        
+        # Deep pattern integration with belief influence
+        deep_activation = np.mean([
+            self.state * (1 + dissonance),
+            conscious_activation * (1 - belief_conflict),
+            subconscious_activation
+        ], axis=0)
+        
+        integrated_response = {
+            'activation': deep_activation,
+            'emotional_factor': self._calculate_emotional_response(
+                subconscious_response.get('emotional_weight', 0.0)
+            ),
+            'dissonance': dissonance,
+            'belief_conflict': belief_conflict
+        }
+        
+        # Update state and history
+        self.state = integrated_response['activation']
+        self.update_history(integrated_response['activation'])
+        
+        return integrated_response
+
+    def _check_belief_consistency(self, content, beliefs):
+        """Check how consistent new information is with existing beliefs"""
+        if not beliefs:
+            return 0.0
+        
+        conflict_score = 0.0
+        relevant_beliefs = 0
+        
+        for belief, strength in beliefs.items():
+            if belief in content.lower():
+                relevant_beliefs += 1
+                # Calculate semantic similarity/conflict
+                conflict_score += abs(strength - self._estimate_semantic_alignment(content, belief))
+        
+        return conflict_score / max(1, relevant_beliefs)
+
+    def _record_cognitive_dissonance(self, features, dissonance):
+        """Record cognitive dissonance for later processing"""
+        self.dissonance_by_context[features.get('context', 'general')].append({
+            'content': features.get('content', ''),
+            'strength': dissonance,
+            'time': len(self.dissonance_by_context)  # Simple timestamp
+        })
+
 class ConsciousnessSystem:
     def __init__(self, size):
         # Initialize layers
-        self.conscious = ConsciousnessLayer(size, "Conscious")
-        self.subconscious = ConsciousnessLayer(size, "Subconscious")
-        self.unconscious = ConsciousnessLayer(size, "Unconscious")
+        self.conscious = ConsciousnessLayer(size, "Conscious", dissonance_threshold=0.4) # TODO: Test varying dissonance thresholds
+        self.subconscious = ConsciousnessLayer(size, "Subconscious", dissonance_threshold=0.3)
+        self.unconscious = ConsciousnessLayer(size, "Unconscious", dissonance_threshold=0.2)
         
         # Connect layers
         self.conscious.layer_below = self.subconscious
@@ -252,7 +417,6 @@ class ConsciousnessSystem:
         self.dissonance_threshold = 0.3
         
         self.context_map = defaultdict(set)  # Track related contexts
-        self.context_dissonance_threshold = 0.3
         
         # Add modulation parameters
         self.conscious_override_threshold = 0.7
@@ -600,3 +764,71 @@ class ConsciousnessSystem:
             subconscious_response,
             unconscious_response
         )
+    
+    def _integrate_text_responses(self, conscious_response, subconscious_response, unconscious_response):
+        """Integrate text processing responses from all consciousness layers"""
+        # Extract activations
+        conscious_activation = conscious_response['activation']
+        subconscious_activation = subconscious_response['activation']
+        unconscious_activation = unconscious_response['activation']
+        
+        # Calculate dissonance between layers
+        dissonance = {
+            'conscious_subconscious': np.mean(np.abs(conscious_activation - subconscious_activation)),
+            'subconscious_unconscious': np.mean(np.abs(subconscious_activation - unconscious_activation)),
+            'conscious_unconscious': np.mean(np.abs(conscious_activation - unconscious_activation))
+        }
+        
+        # Calculate integration weights based on dissonance
+        total_dissonance = sum(dissonance.values()) / 3
+        if total_dissonance > self.dissonance_threshold:
+            # Under high dissonance, favor unconscious/subconscious
+            weights = {
+                'conscious': 0.2,
+                'subconscious': 0.4,
+                'unconscious': 0.4
+            }
+        else:
+            # Normal integration weights
+            weights = {
+                'conscious': 0.4,
+                'subconscious': 0.35,
+                'unconscious': 0.25
+            }
+        
+        # Integrate responses
+        integrated_activation = (
+            conscious_activation * weights['conscious'] +
+            subconscious_activation * weights['subconscious'] +
+            unconscious_activation * weights['unconscious']
+        )
+        
+        # Combine metadata
+        integrated_response = {
+            'activation': integrated_activation,
+            'dissonance': dissonance,
+            'weights': weights,
+            'emotional_weight': unconscious_response.get('emotional_factor', 0.0),
+            'belief_conflict': unconscious_response.get('belief_conflict', 0.0)
+        }
+        
+        # Update system state
+        self._update_system_state(integrated_response)
+        
+        return integrated_response
+
+    def _update_system_state(self, integrated_response):
+        """Update system state based on integrated response"""
+        # Update conscious layer
+        self.conscious.state = integrated_response['activation'] * 0.8 + self.conscious.state * 0.2
+        
+        # Update subconscious layer with more history influence
+        self.subconscious.state = integrated_response['activation'] * 0.6 + self.subconscious.state * 0.4
+        
+        # Update unconscious layer with strong history retention
+        self.unconscious.state = integrated_response['activation'] * 0.3 + self.unconscious.state * 0.7
+        
+        # Update histories
+        for layer in [self.conscious, self.subconscious, self.unconscious]:
+            layer.update_history(layer.state)
+    
