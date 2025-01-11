@@ -19,6 +19,8 @@ from learning import LearningContext, TextLearningContext
 from wiki_scraper import WikiKnowledgeBase
 import networkx as nx
 from serializer import SystemSerializer
+from wordcloud import WordCloud
+import seaborn as sns
 
 def create_learning_scenario():
     context = LearningContext()
@@ -598,6 +600,107 @@ class WikiKnowledgeBase:
             print(f"Error fetching topic {topic}: {str(e)}")
             return None
 
+def visualize_belief_systems(hbs):
+    """Visualize belief systems and consciousness layers"""
+    import matplotlib.pyplot as plt
+    from wordcloud import WordCloud
+    import seaborn as sns
+    
+    fig = plt.figure(figsize=(20, 15))
+    
+    # 1. Belief Context Map (Top Left)
+    ax1 = plt.subplot(221)
+    belief_data = {}
+    for context, value in hbs.consciousness.conscious.belief_contexts.items():
+        if isinstance(value, np.ndarray):
+            belief_data[str(context)] = float(np.mean(value))
+        else:
+            belief_data[str(context)] = float(value)
+    
+    # Create heatmap of belief strengths with safety checks
+    if belief_data:
+        belief_values = list(belief_data.values())
+        num_cols = 4
+        num_rows = max(1, len(belief_values) // num_cols)
+        if num_rows * num_cols < len(belief_values):
+            num_rows += 1
+        belief_values.extend([0] * (num_rows * num_cols - len(belief_values)))
+        belief_matrix = np.array(belief_values).reshape(num_rows, num_cols)
+        sns.heatmap(belief_matrix, ax=ax1, cmap='viridis',
+                   xticklabels=False, yticklabels=False)
+    else:
+        ax1.text(0.5, 0.5, 'No belief data available',
+                ha='center', va='center')
+    ax1.set_title('Belief Context Strengths')
+    
+    # 2. Consciousness Layer Activity (Top Right)
+    ax2 = plt.subplot(222)
+    layer_activities = {
+        'Conscious': np.mean(hbs.consciousness.conscious.activation_history),
+        'Subconscious': np.mean(hbs.consciousness.subconscious.activation_history),
+        'Unconscious': np.mean(hbs.consciousness.unconscious.activation_history)
+    }
+    ax2.bar(layer_activities.keys(), layer_activities.values())
+    ax2.set_title('Consciousness Layer Activity')
+    
+    # 3. Knowledge Word Cloud (Bottom Left)
+    ax3 = plt.subplot(223)
+    word_weights = {}
+    
+    # Get concepts from learning layers
+    if hasattr(hbs, 'learning_context'):
+        for concept, weight in hbs.learning_context.learning_layers['conscious']['active_concepts'].items():
+            word_weights[str(concept)] = float(weight)
+    
+    if word_weights:
+        wordcloud = WordCloud(
+            width=800, height=400,
+            background_color='white'
+        ).generate_from_frequencies(word_weights)
+        ax3.imshow(wordcloud, interpolation='bilinear')
+    else:
+        ax3.text(0.5, 0.5, 'No concept data available',
+                ha='center', va='center')
+    ax3.axis('off')
+    ax3.set_title('Knowledge Concepts')
+    
+    # 4. Relationship Network (Bottom Right)
+    ax4 = plt.subplot(224)
+    if hasattr(hbs, 'learning_context'):
+        G = nx.Graph()
+        # Get relationships from learning layers
+        semantic_assoc = hbs.learning_context.learning_layers['subconscious']['semantic_associations']
+        edge_count = 0
+        for source, targets in semantic_assoc.items():
+            if isinstance(targets, list):
+                for target in targets[:3]:  # Limit to top 3 connections
+                    if edge_count < 20:  # Limit total edges
+                        G.add_edge(str(source), str(target))
+                        edge_count += 1
+        
+        if G.number_of_edges() > 0:
+            pos = nx.spring_layout(G)
+            nx.draw(G, pos, ax=ax4, 
+                    node_color='lightblue',
+                    node_size=500,
+                    font_size=8,
+                    with_labels=True)
+        else:
+            ax4.text(0.5, 0.5, 'No relationship data available',
+                    ha='center', va='center')
+    ax4.set_title('Concept Relationships')
+    
+    plt.tight_layout()
+    
+    # Ensure plots directory exists
+    os.makedirs('./plots', exist_ok=True)
+    
+    # Save the visualization
+    plt.savefig('./plots/belief_systems.png')
+    plt.close()
+    
+    return fig
+
 def main():
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Run personality simulation')
@@ -609,6 +712,8 @@ def main():
         previous_state = load_simulation_state()
         if previous_state and 'metrics' in previous_state:
             plot_learning_results(previous_state['metrics'])
+            if 'hbs' in previous_state:
+                visualize_belief_systems(previous_state['hbs'])
             plt.show()
         else:
             print("No previous state found to plot")
@@ -795,6 +900,7 @@ def main():
         # Plot results if metrics exist
         if metrics and any(metrics.values()):
             plot_learning_results(metrics)
+            visualize_belief_systems(final_hbs)
             plt.show()
     except Exception as e:
         print(f"Simulation failed: {str(e)}")
