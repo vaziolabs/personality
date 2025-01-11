@@ -481,15 +481,20 @@ def visualize_knowledge_state(learning_context, human):
     plt.tight_layout()
     return fig
 
-def save_simulation_state(hbs, learning_context, metrics, filename=None):
-    """Save the entire simulation state"""
+def save_simulation_state(hbs, context, metrics, filename=None):
+    """Save simulation state to file"""
     serializer = SystemSerializer()
     
-    # Create combined state
+    # Create a state dictionary that matches the expected format
     simulation_state = {
-        'hbs': hbs,
-        'learning_context': learning_context,
-        'metrics': metrics
+        'hbs': hbs,  # HumanBehaviorSystem instance
+        'context': context.__dict__,
+        'metrics': {
+            'learning_progress': metrics.get('learning_progress', []),
+            'consciousness_states': metrics.get('consciousness_states', []),
+            'emotional_states': metrics.get('emotional_states', []),
+            'knowledge_acquisition': metrics.get('knowledge_acquisition', {})
+        }
     }
     
     return serializer.save_system(simulation_state, filename)

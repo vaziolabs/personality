@@ -134,8 +134,88 @@ class ConsciousnessLayer:
                 'instinctive_weight': 0.6
             }
 
+    def process_text(self, text_data, desire_context):
+        """Process text input at consciousness layer level"""
+        # Extract semantic features
+        features = self._extract_semantic_features(text_data)
+        
+        # Update activation patterns based on text content
+        activation = self._calculate_text_activation(features)
+        self.update_history(activation)
+        
+        # Process through belief system
+        belief_update = self._process_text_beliefs(features)
+        
+        # Integrate with desire context
+        response = {
+            'activation': activation,
+            'beliefs': belief_update,
+            'patterns': self._identify_text_patterns(features),
+            'emotional_response': self._calculate_emotional_response(features)
+        }
+        
+        return response
+
+    def _extract_semantic_features(self, text_data):
+        """Extract semantic features from text"""
+        return {
+            'content': text_data,
+            'complexity': len(text_data.split()),
+            'emotional_valence': self._estimate_emotional_content(text_data),
+            'pattern_matches': self.find_similar_patterns(
+                np.array([ord(c) % self.size for c in text_data]).reshape(self.size, -1)
+            )
+        }
+
+    def _calculate_text_activation(self, features):
+        """Calculate activation pattern from text features"""
+        base_activation = np.zeros((self.size, self.size))
+        
+        # Modulate by complexity
+        complexity_factor = min(1.0, features['complexity'] / 100.0)
+        base_activation += complexity_factor * self.processing_weights[self.name]
+        
+        # Add emotional influence
+        emotional_factor = features['emotional_valence']
+        base_activation *= (1.0 + emotional_factor * 0.2)
+        
+        return base_activation
+
+    def _process_text_beliefs(self, features):
+        """Process text through belief system"""
+        belief_update = {}
+        
+        # Update beliefs based on pattern matches
+        for location, similarity, emotional_weight in features['pattern_matches']:
+            context_key = f"text_{hash(str(location)) % 100}"
+            self.belief_contexts[context_key] += similarity * self.processing_weights[self.name]
+            belief_update[context_key] = similarity
+            
+        return belief_update
+
+    def _identify_text_patterns(self, features):
+        """Identify patterns in text processing"""
+        return {
+            'semantic': features['pattern_matches'],
+            'activation': self.activation_history[max(0, self.history_index-10):self.history_index].mean(axis=0)
+        }
+
+    def _calculate_emotional_response(self, features):
+        """Calculate emotional response to text"""
+        return features['emotional_valence'] * self.processing_weights[self.name]
+
+    def _estimate_emotional_content(self, text):
+        """Estimate emotional content of text"""
+        # Simple estimation based on pattern matching
+        emotional_value = 0.0
+        for pattern_key, location in self.patterns.items():
+            if str(pattern_key) in text.lower():
+                emotional_value += self.emotional_weights.get(pattern_key, 0.0)
+        return np.tanh(emotional_value)  # Normalize to [-1, 1]
+
 class ConsciousnessSystem:
-    def __init__(self, size=5):
+    def __init__(self, size):
+        # Initialize layers
         self.conscious = ConsciousnessLayer(size, "Conscious")
         self.subconscious = ConsciousnessLayer(size, "Subconscious")
         self.unconscious = ConsciousnessLayer(size, "Unconscious")
@@ -146,6 +226,21 @@ class ConsciousnessSystem:
         self.subconscious.layer_below = self.unconscious
         self.unconscious.layer_above = self.subconscious
         
+        # Add desire system at consciousness system level
+        self.desire = DesireSystem(size)
+        
+        # Add desire layers for each consciousness level
+        self.desire_layers = {
+            'conscious': defaultdict(float),
+            'subconscious': defaultdict(float),
+            'unconscious': defaultdict(float)
+        }
+        
+        # Integration parameters
+        self.belief_integration_rate = 0.1
+        self.pattern_recognition_threshold = 0.7
+        self.emotional_integration_weight = 0.3
+        
         self.history = []
         self.thought_paths = np.zeros((1000, 6, size, size), dtype=np.float32)
         self.path_index = 0
@@ -155,7 +250,6 @@ class ConsciousnessSystem:
         self.pattern_threshold = 0.7
         self.emotional_decay = 0.99
         self.dissonance_threshold = 0.3
-        self.belief_integration_rate = 0.2
         
         self.context_map = defaultdict(set)  # Track related contexts
         self.context_dissonance_threshold = 0.3

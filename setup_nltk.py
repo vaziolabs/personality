@@ -23,12 +23,21 @@ def download_nltk_data():
     resources = {
         'wordnet': ('https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/corpora/wordnet.zip', corpora_dir),
         'punkt': ('https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/tokenizers/punkt.zip', tokenizers_dir),
-        'averaged_perceptron_tagger': ('https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/taggers/averaged_perceptron_tagger.zip', taggers_dir)
+        'punkt_tab': ('https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/tokenizers/punkt_tab.zip', tokenizers_dir),
+        'averaged_perceptron_tagger': ('https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/taggers/averaged_perceptron_tagger.zip', taggers_dir),
+        'averaged_perceptron_tagger_eng': ('https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/taggers/averaged_perceptron_tagger_eng.zip', taggers_dir),
+        'stopwords': ('https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/corpora/stopwords.zip', corpora_dir)
     }
     
     for resource, (url, target_dir) in resources.items():
-        zip_path = os.path.join(target_dir, f'{resource}.zip')
         extract_path = os.path.join(target_dir, resource)
+        
+        # Skip if resource already exists
+        if os.path.exists(extract_path):
+            print(f"{resource} already exists at {extract_path}")
+            continue
+            
+        zip_path = os.path.join(target_dir, f'{resource}.zip')
         
         try:
             # Download the zip file

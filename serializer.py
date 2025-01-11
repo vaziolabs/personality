@@ -10,7 +10,7 @@ class SystemSerializer:
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
             
-    def save_system(self, hbs, filename=None):
+    def save_system(self, simulation_state, filename=None):
         """Save the entire system state"""
         if filename is None:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -18,34 +18,45 @@ class SystemSerializer:
             
         filepath = os.path.join(self.save_dir, filename)
         
-        # Convert defaultdict to dict for serialization
-        system_state = {
-            'hbs': {
-                'energy': hbs.energy,
-                'responsiveness': hbs.responsiveness,
-                'resistance': hbs.resistance,
-                'recovery_rate': hbs.recovery_rate,
-                'memory': hbs.memory.tolist(),
-                'memory_ptr': hbs.memory_ptr,
-                'memory_influence': hbs.memory_influence,
-                'energy_history': hbs.energy_history.tolist(),
-                'history_ptr': hbs.history_ptr,
-                'emotional_state': hbs.emotional_state,
-                'adaptation_rate': hbs.adaptation_rate,
-                'experience_buffer': hbs.experience_buffer,
-                'learning_state': dict(hbs.learning_state),
-                'drives': dict(hbs.drives),
-                'personality': dict(hbs.personality),
-                'personality_weights': dict(hbs.personality_weights),
-                'emotional_memory': self._convert_defaultdict_to_dict(hbs.emotional_memory),
-                'current_context': dict(hbs.current_context),
-                'context_history': hbs.context_history,
-                'context_associations': dict(hbs.context_associations),
-                'desire_layers': self._convert_nested_defaultdict_to_dict(hbs.desire_layers)
-            },
-            'consciousness': self._serialize_consciousness(hbs.consciousness),
-            'learning': self._serialize_learning(hbs.learning_context)
-        }
+        # Handle both direct HBS objects and dictionary state
+        if isinstance(simulation_state, dict):
+            # Extract HBS from simulation state if it exists
+            hbs = simulation_state.get('hbs')
+            if isinstance(hbs, dict):
+                # Already in correct format
+                system_state = simulation_state
+            else:
+                # Convert HBS object to serializable format
+                system_state = {
+                    'hbs': {
+                        'energy': getattr(hbs, 'energy', 0.0),
+                        'responsiveness': getattr(hbs, 'responsiveness', 0.0),
+                        'resistance': getattr(hbs, 'resistance', 0.0),
+                        'recovery_rate': getattr(hbs, 'recovery_rate', 0.0),
+                        'emotional_state': getattr(hbs, 'emotional_state', 0.0),
+                        'adaptation_rate': getattr(hbs, 'adaptation_rate', 0.0),
+                        'learning_state': dict(getattr(hbs, 'learning_state', {})),
+                        'drives': dict(getattr(hbs, 'drives', {})),
+                        'personality': dict(getattr(hbs, 'personality', {}))
+                    },
+                    'context': simulation_state.get('context', {}),
+                    'metrics': simulation_state.get('metrics', {})
+                }
+        else:
+            # Direct HBS object
+            system_state = {
+                'hbs': {
+                    'energy': simulation_state.energy,
+                    'responsiveness': simulation_state.responsiveness,
+                    'resistance': simulation_state.resistance,
+                    'recovery_rate': simulation_state.recovery_rate,
+                    'emotional_state': simulation_state.emotional_state,
+                    'adaptation_rate': simulation_state.adaptation_rate,
+                    'learning_state': dict(simulation_state.learning_state),
+                    'drives': dict(simulation_state.drives),
+                    'personality': dict(simulation_state.personality)
+                }
+            }
         
         with open(filepath, 'wb') as f:
             pickle.dump(system_state, f)

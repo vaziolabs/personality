@@ -695,17 +695,159 @@ class HumanBehaviorSystem:
 
     def process_text_knowledge(self, knowledge_item):
         """Process text knowledge across consciousness levels"""
-        # Conscious processing
+        # Extract concepts and relationships
         concepts = self._extract_concepts(knowledge_item['content'])
+        relationships = self._extract_relationships(
+            knowledge_item['content'],
+            knowledge_item.get('links', {})
+        )
+        
+        # Process through consciousness system
+        consciousness_response = self.consciousness.process_text_input(
+            knowledge_item['content'],
+            context={'concepts': concepts, 'relationships': relationships}
+        )
+        
+        # Update learning context
+        learning_results = {
+            'concepts': concepts,
+            'relationships': relationships,
+            'consciousness_response': consciousness_response
+        }
+        
+        # Process through learning layers
         self.learning_context.learning_layers['conscious']['active_concepts'].update(
             {concept: 1.0 for concept in concepts}
         )
         
-        # Subconscious processing
+        # Process semantic associations
         self._process_semantic_associations(knowledge_item)
         
-        # Unconscious processing
+        # Integrate deep patterns
         self._integrate_deep_patterns(knowledge_item)
         
-        # Update desire system
+        # Update knowledge desires
         self._update_knowledge_desires(concepts)
+        
+        return learning_results
+
+    def _extract_concepts(self, text):
+        """Extract key concepts from text content"""
+        # Initialize NLTK if not already done
+        try:
+            from nltk import word_tokenize, pos_tag
+            from nltk.corpus import stopwords
+        except:
+            import nltk
+            nltk.download('punkt')
+            nltk.download('averaged_perceptron_tagger')
+            nltk.download('stopwords')
+            from nltk import word_tokenize, pos_tag
+            from nltk.corpus import stopwords
+        
+        # Tokenize and tag parts of speech
+        tokens = word_tokenize(text.lower())
+        tagged = pos_tag(tokens)
+        
+        # Extract nouns and important concepts
+        stop_words = set(stopwords.words('english'))
+        concepts = []
+        
+        for word, tag in tagged:
+            if (tag.startswith(('NN', 'VB', 'JJ')) and 
+                word not in stop_words and 
+                len(word) > 2):
+                concepts.append(word)
+        
+        return list(set(concepts))  # Remove duplicates
+
+    def _process_semantic_associations(self, knowledge_item):
+        """Process semantic associations from text knowledge"""
+        # Extract relationships from content and links
+        relationships = self._extract_relationships(
+            knowledge_item['content'],
+            knowledge_item.get('links', {})
+        )
+        
+        # Update subconscious learning layers
+        for source, targets in relationships.items():
+            self.learning_context.learning_layers['subconscious']['semantic_associations'][source].extend(targets)
+            
+            # Update pattern recognition weights
+            pattern_strength = len(targets) / 10.0  # Normalize by max expected connections
+            self.learning_context.learning_layers['subconscious']['pattern_recognition'][source] += pattern_strength
+
+    def _extract_relationships(self, content, links):
+        """Extract semantic relationships from text content and links"""
+        relationships = defaultdict(list)
+        
+        # Process main content for co-occurrence relationships
+        words = content.lower().split()
+        window_size = 5
+        
+        for i in range(len(words)):
+            window = words[max(0, i-window_size):min(len(words), i+window_size)]
+            for word in window:
+                if word != words[i]:
+                    relationships[words[i]].append(word)
+        
+        # Process links for hierarchical relationships
+        for link, summary in links.items():
+            link_words = link.lower().split()
+            summary_words = summary.lower().split()
+            
+            for word in link_words:
+                relationships[word].extend(summary_words)
+        
+        return relationships
+
+    def _integrate_deep_patterns(self, knowledge_item):
+        """Integrate knowledge into unconscious patterns"""
+        # Extract core concepts and relationships
+        concepts = self._extract_concepts(knowledge_item['content'])
+        relationships = self._extract_relationships(
+            knowledge_item['content'],
+            knowledge_item.get('links', {})
+        )
+        
+        # Update unconscious learning layers
+        for concept in concepts:
+            # Update deep abstractions based on concept frequency
+            self.learning_context.learning_layers['unconscious']['deep_abstractions'][concept] += 0.1
+            
+            # Update intuitive models based on relationships
+            if concept in relationships:
+                self.learning_context.learning_layers['unconscious']['intuitive_models'][concept].extend(
+                    relationships[concept]
+                )
+
+    def _update_knowledge_desires(self, concepts):
+        """Update knowledge-related desires based on learned concepts"""
+        # Calculate base desire updates
+        understanding_increase = len(concepts) * 0.05
+        mastery_increase = len(concepts) * 0.03
+        curiosity_boost = len(concepts) * 0.08
+        
+        # Apply personality modifiers
+        understanding_mod = 1.0 + self.personality['openness'] * 0.5
+        mastery_mod = 1.0 + self.personality['conscientiousness'] * 0.5
+        curiosity_mod = 1.0 + (self.personality['openness'] + 
+                              self.personality['extraversion']) * 0.25
+        
+        # Update knowledge desires with personality influence
+        for concept in concepts:
+            self.consciousness.desire.knowledge_desires['understanding'][concept] += (
+                understanding_increase * understanding_mod
+            )
+            self.consciousness.desire.knowledge_desires['mastery'][concept] += (
+                mastery_increase * mastery_mod
+            )
+            self.consciousness.desire.knowledge_desires['curiosity'][concept] += (
+                curiosity_boost * curiosity_mod
+            )
+            
+            # Decay older knowledge desires slightly
+            for desire_type in self.consciousness.desire.knowledge_desires:
+                for existing_concept in self.consciousness.desire.knowledge_desires[desire_type]:
+                    if existing_concept != concept:
+                        self.consciousness.desire.knowledge_desires[desire_type][existing_concept] *= 0.95
