@@ -1,7 +1,7 @@
 # README: Human Behavior Simulation System
 
-![image](https://github.com/user-attachments/assets/766090fa-05b7-4647-9a94-dbc8649d5b67)
 After 100 iterations of exposure to a collection of wikipedia arguments.
+![image](https://github.com/user-attachments/assets/766090fa-05b7-4647-9a94-dbc8649d5b67)
 
 ## Overview
 
