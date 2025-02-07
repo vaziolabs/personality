@@ -1,5 +1,8 @@
 # README: Human Behavior Simulation System
 
+![image](https://github.com/user-attachments/assets/766090fa-05b7-4647-9a94-dbc8649d5b67)
+
+
 ## Overview
 
 This document outlines the architectural design of the Human Behavior Simulation (HBS) system, focusing on its core components and supporting modules. The HBS system is designed to simulate complex human-like behavior through a multi-layered consciousness model, integrating learning, desire, and prediction systems.
