@@ -1,4 +1,7 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 85b6e23 (ignoring pickles)
 ./saved_states/*
 ./*/saved_states/
 *.pkl
