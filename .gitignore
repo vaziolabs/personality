@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 ./saved_states/*
 ./*/saved_states/
 *.pkl
 __pycache__/
+=======
+./*/saved_states/*
+./*/saved_states/
+>>>>>>> f14555e (updated system)
