@@ -1,4 +1,4 @@
+./saved_states/
 ./saved_states/*
-./*/saved_states/
 *.pkl
 __pycache__/
