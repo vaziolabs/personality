@@ -1,0 +1,51 @@
+flowchart TD
+    HBS[Human Behavioral System] --> P[Perception]
+    HBS --> B[Beliefs]
+    HBS --> D[Desire]
+    
+    subgraph "Consciousness Layers"
+        CON[Conscious/Explicit]
+        SUB[Subconscious/Implicit] 
+        UNC[Unconscious/Primal]
+    end
+    
+    subgraph "Belief System"
+        B --> CB[Core Beliefs]
+        B --> LB[Learned Beliefs]
+        CB <--> LB
+    end
+    
+    subgraph "Desire Types"
+        D --> BD[Biological]
+        D --> PD[Psychological] 
+        D --> AD[Aspirational]
+    end
+    
+    subgraph "Goal Formation"
+        STG[Short-Term Goals]
+        LTG[Long-Term Goals]
+        STG <--> LTG
+    end
+    
+    subgraph "Feedback Systems"
+        CF[Cognitive Feedback]
+        EF[Emotional Feedback]
+        ENF[Environmental Feedback]
+        IR[Impulse Regulation]
+        SI[Social Interaction]
+    end
+
+    %% Consciousness as Foundation
+    CON & SUB & UNC --> B
+    CON & SUB & UNC --> D
+    
+    %% Goal Formation
+    B & D --> STG & LTG
+    
+    %% Feedback Systems
+    STG & LTG --> CF & EF & ENF
+    CF & EF & ENF --> IR & SI
+    IR & SI --> B & D
+    
+    %% Perception
+    P --> CON & SUB & UNC
