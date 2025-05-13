@@ -1,16 +1,4 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 85b6e23 (ignoring pickles)
 ./saved_states/*
 ./*/saved_states/
 *.pkl
 __pycache__/
-=======
-./*/saved_states/*
-./*/saved_states/
-<<<<<<< HEAD
->>>>>>> f14555e (updated system)
-=======
-*.pkl
->>>>>>> aaef778 (ignoring pickles)
