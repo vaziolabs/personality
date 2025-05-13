@@ -6,4 +6,8 @@ __pycache__/
 =======
 ./*/saved_states/*
 ./*/saved_states/
+<<<<<<< HEAD
 >>>>>>> f14555e (updated system)
+=======
+*.pkl
+>>>>>>> aaef778 (ignoring pickles)
